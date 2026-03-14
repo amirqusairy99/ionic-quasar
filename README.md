@@ -38,7 +38,7 @@ It mirrors a realistic production environment without explicit hints, CTF banner
 ### Run
 
 ```bash
-git clone https://github.com/your-org/talentforge.git
+git clone https://github.com/amirqusairy99/ionic-quasar.git
 cd talentforge
 docker-compose up --build
 ```
