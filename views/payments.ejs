@@ -1,0 +1,180 @@
+<%- include('partials/header') %>
+<% const pageTitle = 'Payments'; %>
+
+<section class="py-5">
+    <div class="container">
+        <h2 class="fw-bold mb-4"><i class="bi bi-wallet2 me-2 text-warning"></i>Payments</h2>
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card glass-card p-4 text-center mb-4">
+                    <h6 class="text-muted mb-2">Available Balance</h6>
+                    <h2 class="fw-bold text-success mb-0" id="balanceAmount">
+                        <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+                    </h2>
+                </div>
+
+                <!-- Withdraw Form -->
+                <div class="card glass-card p-4 mb-4">
+                    <h5 class="fw-semibold mb-3">Withdraw Funds</h5>
+                    <div id="withdrawAlert" class="alert d-none"></div>
+                    <form id="withdrawForm">
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">Amount ($)</label>
+                            <input type="number" class="form-control" id="withdrawAmount" placeholder="0.00" step="0.01" required min="0.01">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">Withdrawal Method</label>
+                            <select class="form-select" id="withdrawMethod">
+                                <option value="bank_transfer">Bank Transfer (ACH)</option>
+                                <option value="paypal">PayPal</option>
+                                <option value="wire">Wire Transfer</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-warning w-100 fw-semibold">
+                            <i class="bi bi-cash-stack me-1"></i>Withdraw
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Coupon Redeem -->
+                <div class="card glass-card p-4">
+                    <h5 class="fw-semibold mb-3">Redeem Coupon</h5>
+                    <div id="couponAlert" class="alert d-none"></div>
+                    <form id="couponForm">
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">Coupon Code</label>
+                            <input type="text" class="form-control" id="couponCode" placeholder="e.g., SAVE20" required>
+                        </div>
+                        <button type="submit" class="btn btn-outline-warning w-100 fw-semibold">
+                            <i class="bi bi-gift me-1"></i>Redeem
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card glass-card p-4">
+                    <h5 class="fw-semibold mb-3">Transaction History</h5>
+                    <div id="transactionsContent">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-warning" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', loadPayments);
+
+async function loadPayments() {
+    try {
+        const res = await fetch('/api/v1/payments/balance');
+        const data = await res.json();
+
+        document.getElementById('balanceAmount').textContent = `$${Number(data.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+
+        if (data.transactions.length === 0) {
+            document.getElementById('transactionsContent').innerHTML = `
+                <p class="text-muted text-center">No transactions yet.</p>`;
+            return;
+        }
+
+        document.getElementById('transactionsContent').innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Description</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.transactions.map(tx => `
+                            <tr>
+                                <td>
+                                    <span class="badge bg-${tx.type === 'payment' || tx.type === 'coupon' || tx.type === 'deposit' ? 'success' : 'danger'} bg-opacity-25 text-${tx.type === 'payment' || tx.type === 'coupon' || tx.type === 'deposit' ? 'success' : 'danger'}">
+                                        ${tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}
+                                    </span>
+                                </td>
+                                <td class="${tx.amount >= 0 ? 'text-success' : 'text-danger'} fw-semibold">
+                                    ${tx.amount >= 0 ? '+' : ''}$${Number(Math.abs(tx.amount)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td class="text-muted small">${escapeHtml(tx.description || '')}</td>
+                                <td class="text-muted small">${new Date(tx.created_at).toLocaleDateString()}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+    } catch (err) {
+        document.getElementById('transactionsContent').innerHTML = `
+            <p class="text-danger text-center">Failed to load payments</p>`;
+    }
+}
+
+document.getElementById('withdrawForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const alert = document.getElementById('withdrawAlert');
+    try {
+        const res = await fetch('/api/v1/payments/withdraw', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: document.getElementById('withdrawAmount').value,
+                method: document.getElementById('withdrawMethod').value
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert.className = 'alert alert-success';
+            alert.textContent = data.message;
+            loadPayments();
+        } else {
+            alert.className = 'alert alert-danger';
+            alert.textContent = data.error;
+        }
+    } catch (err) {
+        alert.className = 'alert alert-danger';
+        alert.textContent = 'Withdrawal failed';
+    }
+});
+
+document.getElementById('couponForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const alert = document.getElementById('couponAlert');
+    try {
+        const res = await fetch('/api/v1/payments/coupon', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: document.getElementById('couponCode').value })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert.className = 'alert alert-success';
+            alert.textContent = data.message;
+            loadPayments();
+        } else {
+            alert.className = 'alert alert-danger';
+            alert.textContent = data.error;
+        }
+    } catch (err) {
+        alert.className = 'alert alert-danger';
+        alert.textContent = 'Failed to redeem coupon';
+    }
+});
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,74 @@
+<%- include('partials/header') %>
+<% const pageTitle = 'Messages'; %>
+
+<section class="py-5">
+    <div class="container">
+        <h2 class="fw-bold mb-4"><i class="bi bi-chat-dots me-2 text-warning"></i>Messages</h2>
+        <div id="threadsContent">
+            <div class="text-center py-5">
+                <div class="spinner-border text-warning" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const res = await fetch('/api/v1/messages');
+        const threads = await res.json();
+
+        if (threads.length === 0) {
+            document.getElementById('threadsContent').innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-chat-dots fs-1 text-muted"></i>
+                    <h5 class="text-muted mt-3">No conversations yet</h5>
+                    <p class="text-muted">Start a conversation by messaging someone from their profile.</p>
+                </div>`;
+            return;
+        }
+
+        const currentUserId = <%= user ? user.id : 'null' %>;
+        document.getElementById('threadsContent').innerHTML = `
+            <div class="row g-3">
+                ${threads.map(thread => {
+                    const otherName = thread.participant_one === currentUserId ? thread.participant_two_name : thread.participant_one_name;
+                    const otherAvatar = thread.participant_one === currentUserId ? thread.participant_two_avatar : thread.participant_one_avatar;
+                    return `
+                    <div class="col-12">
+                        <a href="/messages/${thread.id}" class="card glass-card text-decoration-none thread-card">
+                            <div class="card-body p-3 d-flex align-items-center">
+                                <img src="${otherAvatar}" class="rounded-circle me-3" width="48" height="48" alt="">
+                                <div class="flex-grow-1 min-width-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="fw-semibold mb-0">${escapeHtml(otherName)}</h6>
+                                        <small class="text-muted">${new Date(thread.last_message_at).toLocaleDateString()}</small>
+                                    </div>
+                                    <p class="text-muted small mb-0 text-truncate">${escapeHtml(thread.last_message || 'No messages yet')}</p>
+                                </div>
+                                ${thread.unread_count > 0 ? `<span class="badge bg-warning rounded-pill ms-2">${thread.unread_count}</span>` : ''}
+                            </div>
+                        </a>
+                    </div>`;
+                }).join('')}
+            </div>`;
+    } catch (err) {
+        document.getElementById('threadsContent').innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-exclamation-circle fs-1 text-danger"></i>
+                <h5 class="text-muted mt-3">Failed to load messages</h5>
+            </div>`;
+    }
+});
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+<%- include('partials/footer') %>

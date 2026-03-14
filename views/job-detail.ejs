@@ -1,0 +1,166 @@
+<%- include('partials/header') %>
+<% const pageTitle = 'Job Details'; %>
+
+<section class="py-5">
+    <div class="container">
+        <div class="row g-4" id="jobDetailContent">
+            <div class="text-center py-5">
+                <div class="spinner-border text-warning" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Apply Modal -->
+<div class="modal fade" id="applyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content glass-card">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold">Submit Proposal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="applyError" class="alert alert-danger d-none"></div>
+                <div id="applySuccess" class="alert alert-success d-none"></div>
+                <form id="applyForm">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Cover Letter</label>
+                        <textarea class="form-control" id="coverLetter" rows="5" placeholder="Explain why you're a great fit for this project..." required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Proposed Rate ($)</label>
+                        <input type="number" class="form-control" id="proposedRate" placeholder="Your proposed rate" required>
+                    </div>
+                    <button type="submit" class="btn btn-warning w-100 fw-semibold">
+                        <i class="bi bi-send me-1"></i> Submit Proposal
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const jobId = '<%= jobId %>';
+
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const res = await fetch(`/api/v1/jobs/${jobId}`);
+        const job = await res.json();
+
+        if (res.status === 404) {
+            document.getElementById('jobDetailContent').innerHTML = `
+                <div class="col-12 text-center py-5">
+                    <i class="bi bi-search fs-1 text-muted"></i>
+                    <h5 class="text-muted mt-3">Job not found</h5>
+                    <a href="/jobs" class="btn btn-warning mt-3">Browse Jobs</a>
+                </div>`;
+            return;
+        }
+
+        const createdDate = new Date(job.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        document.getElementById('jobDetailContent').innerHTML = `
+            <div class="col-lg-8">
+                <nav aria-label="breadcrumb" class="mb-3">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/jobs" class="text-warning text-decoration-none">Jobs</a></li>
+                        <li class="breadcrumb-item active">${escapeHtml(job.title)}</li>
+                    </ol>
+                </nav>
+                <div class="card glass-card p-4 mb-4">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h2 class="fw-bold mb-2">${escapeHtml(job.title)}</h2>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <span class="badge bg-${job.status === 'open' ? 'success' : 'secondary'} bg-opacity-25 text-${job.status === 'open' ? 'success' : 'secondary'}">
+                                    <i class="bi bi-circle-fill me-1 small"></i>${job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                                </span>
+                                <span class="badge bg-primary bg-opacity-25 text-primary">${job.job_type === 'fixed' ? 'Fixed Price' : 'Hourly'}</span>
+                                <span class="badge bg-warning bg-opacity-25 text-warning">${job.experience_level.charAt(0).toUpperCase() + job.experience_level.slice(1)}</span>
+                                ${job.category ? `<span class="badge bg-info bg-opacity-25 text-info">${escapeHtml(job.category)}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="job-description mb-4">
+                        <h5 class="fw-semibold mb-3">Project Description</h5>
+                        <div class="text-muted" style="white-space: pre-wrap;">${job.description}</div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-3 text-muted small">
+                        <span><i class="bi bi-calendar me-1"></i>Posted ${createdDate}</span>
+                        <span><i class="bi bi-people me-1"></i>${job.application_count} proposals</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card glass-card p-4 mb-4">
+                    <h5 class="fw-semibold mb-3">Budget</h5>
+                    <h3 class="text-success fw-bold">$${Number(job.budget_min).toLocaleString()} — $${Number(job.budget_max).toLocaleString()}</h3>
+                    <p class="text-muted small mb-4">${job.job_type === 'fixed' ? 'Fixed price project' : 'Hourly rate'}</p>
+                    <button class="btn btn-warning w-100 fw-semibold py-2" data-bs-toggle="modal" data-bs-target="#applyModal" id="applyBtn">
+                        <i class="bi bi-send me-1"></i> Submit Proposal
+                    </button>
+                </div>
+                <div class="card glass-card p-4">
+                    <h5 class="fw-semibold mb-3">About the Client</h5>
+                    <div class="d-flex align-items-center mb-3">
+                        <img src="${job.poster_avatar}" class="rounded-circle me-3" width="48" height="48" alt="">
+                        <div>
+                            <a href="/profile/${job.poster_id}" class="fw-semibold text-decoration-none">${escapeHtml(job.poster_name)}</a>
+                            <div class="text-muted small">Member since 2024</div>
+                        </div>
+                    </div>
+                    <a href="/profile/${job.poster_id}" class="btn btn-outline-secondary btn-sm w-100">View Profile</a>
+                </div>
+            </div>
+        `;
+
+        // Apply form handler
+        document.getElementById('applyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            try {
+                const applyRes = await fetch('/api/v1/applications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_id: jobId,
+                        cover_letter: document.getElementById('coverLetter').value,
+                        proposed_rate: document.getElementById('proposedRate').value
+                    })
+                });
+                const result = await applyRes.json();
+                if (applyRes.ok) {
+                    document.getElementById('applySuccess').textContent = result.message;
+                    document.getElementById('applySuccess').classList.remove('d-none');
+                    document.getElementById('applyError').classList.add('d-none');
+                    document.getElementById('applyForm').reset();
+                } else {
+                    document.getElementById('applyError').textContent = result.error;
+                    document.getElementById('applyError').classList.remove('d-none');
+                }
+            } catch (err) {
+                document.getElementById('applyError').textContent = 'Failed to submit proposal';
+                document.getElementById('applyError').classList.remove('d-none');
+            }
+        });
+
+    } catch (err) {
+        document.getElementById('jobDetailContent').innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="bi bi-exclamation-circle fs-1 text-danger"></i>
+                <h5 class="text-muted mt-3">Failed to load job details</h5>
+            </div>`;
+    }
+});
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+<%- include('partials/footer') %>

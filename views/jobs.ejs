@@ -1,0 +1,133 @@
+<%- include('partials/header') %>
+<% const pageTitle = 'Browse Jobs'; %>
+
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-1">Browse Jobs</h2>
+                <p class="text-muted mb-0" id="jobCount">Loading jobs...</p>
+            </div>
+            <div class="d-flex gap-2 mt-3 mt-md-0">
+                <form class="d-flex gap-2" id="searchForm" method="GET" action="/jobs">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" name="q" id="searchInput" placeholder="Search jobs..." value="<%= typeof query !== 'undefined' && query.q ? query.q : '' %>">
+                    </div>
+                    <select class="form-select" style="width: auto;" id="sortSelect" name="sort">
+                        <option value="created_at" <%= typeof query !== 'undefined' && query.sort === 'created_at' ? 'selected' : '' %>>Newest</option>
+                        <option value="budget_max" <%= typeof query !== 'undefined' && query.sort === 'budget_max' ? 'selected' : '' %>>Budget</option>
+                        <option value="title" <%= typeof query !== 'undefined' && query.sort === 'title' ? 'selected' : '' %>>Title</option>
+                    </select>
+                    <button class="btn btn-warning" type="submit"><i class="bi bi-search"></i></button>
+                </form>
+            </div>
+        </div>
+
+        <div class="row g-4" id="jobsList">
+            <div class="text-center py-5">
+                <div class="spinner-border text-warning" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <nav class="mt-5" id="paginationNav">
+            <ul class="pagination justify-content-center" id="pagination"></ul>
+        </nav>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q') || '';
+    const sort = params.get('sort') || 'created_at';
+    const page = parseInt(params.get('page')) || 1;
+
+    loadJobs(q, sort, page);
+
+    document.getElementById('searchForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const searchQ = document.getElementById('searchInput').value;
+        const searchSort = document.getElementById('sortSelect').value;
+        window.location.href = `/jobs?q=${encodeURIComponent(searchQ)}&sort=${searchSort}`;
+    });
+});
+
+async function loadJobs(q, sort, page) {
+    try {
+        const res = await fetch(`/api/v1/jobs?q=${encodeURIComponent(q)}&sort=${sort}&page=${page}&limit=12`);
+        const data = await res.json();
+
+        document.getElementById('jobCount').textContent = `${data.pagination.total} jobs found`;
+
+        if (data.jobs.length === 0) {
+            document.getElementById('jobsList').innerHTML = `
+                <div class="col-12 text-center py-5">
+                    <i class="bi bi-search fs-1 text-muted"></i>
+                    <h5 class="text-muted mt-3">No jobs found</h5>
+                    <p class="text-muted">Try adjusting your search criteria</p>
+                </div>`;
+            return;
+        }
+
+        document.getElementById('jobsList').innerHTML = data.jobs.map(job => `
+            <div class="col-md-6 col-lg-4">
+                <div class="card job-card h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <span class="badge bg-${job.job_type === 'fixed' ? 'primary' : 'info'} bg-opacity-25 text-${job.job_type === 'fixed' ? 'primary' : 'info'} small">
+                                ${job.job_type === 'fixed' ? 'Fixed Price' : 'Hourly'}
+                            </span>
+                            <span class="badge bg-${job.experience_level === 'expert' ? 'danger' : job.experience_level === 'intermediate' ? 'warning' : 'success'} bg-opacity-25 text-${job.experience_level === 'expert' ? 'danger' : job.experience_level === 'intermediate' ? 'warning' : 'success'} small">
+                                ${job.experience_level.charAt(0).toUpperCase() + job.experience_level.slice(1)}
+                            </span>
+                        </div>
+                        <h5 class="card-title fw-semibold mb-2">
+                            <a href="/jobs/${job.id}" class="text-decoration-none stretched-link">${escapeHtml(job.title)}</a>
+                        </h5>
+                        <p class="card-text text-muted small mb-3">${escapeHtml(job.description.substring(0, 120))}...</p>
+                        <div class="d-flex align-items-center mb-3">
+                            <img src="${job.poster_avatar}" class="rounded-circle me-2" width="24" height="24" alt="">
+                            <small class="text-muted">${escapeHtml(job.poster_name)}</small>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top border-opacity-10">
+                            <span class="fw-semibold text-success">$${Number(job.budget_min).toLocaleString()} — $${Number(job.budget_max).toLocaleString()}</span>
+                            <small class="text-muted">${escapeHtml(job.category || '')}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Pagination
+        const { pages, page: currentPage } = data.pagination;
+        if (pages > 1) {
+            let paginationHtml = '';
+            for (let i = 1; i <= pages; i++) {
+                paginationHtml += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="/jobs?q=${encodeURIComponent(q)}&sort=${sort}&page=${i}">${i}</a>
+                    </li>`;
+            }
+            document.getElementById('pagination').innerHTML = paginationHtml;
+        }
+    } catch (err) {
+        document.getElementById('jobsList').innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="bi bi-exclamation-circle fs-1 text-danger"></i>
+                <h5 class="text-muted mt-3">Failed to load jobs</h5>
+            </div>`;
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+<%- include('partials/footer') %>

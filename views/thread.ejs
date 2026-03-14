@@ -1,0 +1,104 @@
+<%- include('partials/header') %>
+<% const pageTitle = 'Conversation'; %>
+
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <a href="/messages" class="btn btn-outline-secondary btn-sm mb-3">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Inbox
+                </a>
+                <div class="card glass-card" id="threadContainer">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-warning" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+const threadId = '<%= threadId %>';
+const currentUserId = <%= user ? user.id : 'null' %>;
+
+document.addEventListener('DOMContentLoaded', loadThread);
+
+async function loadThread() {
+    try {
+        const res = await fetch(`/api/v1/messages/${threadId}`);
+        const data = await res.json();
+
+        const otherName = data.thread.participant_one === currentUserId
+            ? data.thread.participant_two_name : data.thread.participant_one_name;
+        const otherAvatar = data.thread.participant_one === currentUserId
+            ? data.thread.participant_two_avatar : data.thread.participant_one_avatar;
+
+        document.getElementById('threadContainer').innerHTML = `
+            <div class="card-header p-3 d-flex align-items-center" style="background: rgba(255,255,255,0.05)">
+                <img src="${otherAvatar}" class="rounded-circle me-3" width="40" height="40" alt="">
+                <h6 class="fw-semibold mb-0">${escapeHtml(otherName)}</h6>
+            </div>
+            <div class="card-body p-3" id="messagesContainer" style="max-height: 500px; overflow-y: auto;">
+                ${data.messages.map(msg => `
+                    <div class="d-flex mb-3 ${msg.sender_id === currentUserId ? 'justify-content-end' : ''}">
+                        ${msg.sender_id !== currentUserId ? `<img src="${msg.sender_avatar}" class="rounded-circle me-2 align-self-end" width="32" height="32" alt="">` : ''}
+                        <div class="message-bubble ${msg.sender_id === currentUserId ? 'sent' : 'received'}" style="max-width: 70%;">
+                            <div class="p-3 rounded-3 ${msg.sender_id === currentUserId ? 'bg-warning text-dark' : ''}" style="${msg.sender_id !== currentUserId ? 'background: rgba(255,255,255,0.08)' : ''}">
+                                <div class="small">${msg.content}</div>
+                            </div>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">${new Date(msg.created_at).toLocaleString()}</small>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="card-footer p-3" style="background: rgba(255,255,255,0.03)">
+                <form id="messageForm" class="d-flex gap-2">
+                    <input type="text" class="form-control" id="messageInput" placeholder="Type your message..." required>
+                    <button type="submit" class="btn btn-warning px-4">
+                        <i class="bi bi-send"></i>
+                    </button>
+                </form>
+            </div>
+        `;
+
+        // Scroll to bottom
+        const container = document.getElementById('messagesContainer');
+        container.scrollTop = container.scrollHeight;
+
+        // Send message handler
+        document.getElementById('messageForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const content = document.getElementById('messageInput').value;
+            try {
+                await fetch('/api/v1/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ thread_id: threadId, content })
+                });
+                document.getElementById('messageInput').value = '';
+                loadThread();
+            } catch (err) {
+                alert('Failed to send message');
+            }
+        });
+    } catch (err) {
+        document.getElementById('threadContainer').innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-exclamation-circle fs-1 text-danger"></i>
+                <h5 class="text-muted mt-3">Failed to load conversation</h5>
+            </div>`;
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+<%- include('partials/footer') %>
