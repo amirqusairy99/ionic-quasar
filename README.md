@@ -4,6 +4,8 @@ A modern, full-featured freelance job marketplace starter template built with No
 
 ![Node.js](https://img.shields.io/badge/Node.js-18-green) ![Express](https://img.shields.io/badge/Express-4.x-lightgrey) ![MySQL](https://img.shields.io/badge/MySQL-8.0-blue) ![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-purple)
 
+![Screenshot](Screenshot.png)
+
 ## 🛡️ Security Training & Education
 
 **TalentForge is purposefully built as a vulnerable-by-design application for security training and educational purposes.** 
